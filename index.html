@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#0a0a0f">
+<title>Filament DB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0a0a0f;
+    --surface:  #13131a;
+    --card:     #1c1c27;
+    --border:   #2a2a3a;
+    --accent:   #00e5ff;
+    --accent2:  #ff6b35;
+    --text:     #e8e8f0;
+    --muted:    #6b6b85;
+    --mono:     'Space Mono', monospace;
+    --sans:     'DM Sans', sans-serif;
+    --radius:   12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid noise texture overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% 10%, rgba(0,229,255,.06) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(255,107,53,.05) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 680px; margin: 0 auto; padding: 0 16px 80px; }
+
+  /* ── Header ── */
+  .hdr {
+    padding: 28px 0 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .hdr-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #0077aa);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+  }
+  .hdr-title { font-family: var(--mono); font-size: 18px; font-weight: 700; letter-spacing: -.5px; }
+  .hdr-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Search ── */
+  .search-wrap { position: relative; margin-bottom: 20px; }
+  .search-wrap input {
+    width: 100%; padding: 14px 46px 14px 18px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text);
+    font-family: var(--sans); font-size: 15px;
+    outline: none; transition: border-color .2s;
+  }
+  .search-wrap input:focus { border-color: var(--accent); }
+  .search-wrap input::placeholder { color: var(--muted); }
+  .search-wrap .ico { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+
+  /* ── Filter chips ── */
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .chip {
+    padding: 6px 14px; border-radius: 99px; font-size: 12px; font-weight: 600;
+    border: 1px solid var(--border); background: var(--card);
+    color: var(--muted); cursor: pointer; transition: all .15s;
+    font-family: var(--mono); letter-spacing: .3px;
+  }
+  .chip.active, .chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,.08); }
+
+  /* ── Section label ── */
+  .section-label {
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    letter-spacing: 2px; color: var(--muted);
+    text-transform: uppercase; margin: 24px 0 10px;
+  }
+
+  /* ── Filament card ── */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 18px;
+    margin-bottom: 8px; cursor: pointer;
+    transition: border-color .15s, transform .1s;
+    display: grid; grid-template-columns: auto 1fr auto;
+    gap: 14px; align-items: center;
+  }
+  .card:hover { border-color: var(--accent); transform: translateX(2px); }
+  .card.color-card { grid-template-columns: 28px auto 1fr auto; gap: 12px; padding: 12px 16px; }
+
+  .swatch {
+    width: 28px; height: 28px; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,.12); flex-shrink: 0;
+  }
+  .card-id { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 3px; }
+  .card-name { font-size: 15px; font-weight: 600; }
+  .card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .card-badge {
+    padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 600;
+    font-family: var(--mono); white-space: nowrap;
+    background: rgba(255,255,255,.06); color: var(--muted);
+  }
+
+  /* ── Detail panel ── */
+  .detail {
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,.7); backdrop-filter: blur(8px);
+    align-items: flex-end; justify-content: center;
+    padding: 0;
+  }
+  .detail.open { display: flex; }
+  .detail-sheet {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px 20px 0 0; width: 100%; max-width: 680px;
+    max-height: 92vh; overflow-y: auto;
+    padding: 0 0 40px;
+    animation: slideUp .25s cubic-bezier(.32,1,.64,1);
+  }
+  @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  .detail-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 14px auto 0; }
+  .detail-head {
+    display: grid; grid-template-columns: 1fr auto;
+    align-items: start; padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-id { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 4px; }
+  .detail-name { font-size: 22px; font-weight: 600; line-height: 1.2; }
+  .detail-brand { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .close-btn {
+    width: 36px; height: 36px; border-radius: 99px;
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--muted); font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s; flex-shrink: 0;
+  }
+  .close-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* Color swatch large */
+  .detail-swatch-wrap { padding: 20px 24px 0; }
+  .detail-swatch-large {
+    width: 100%; height: 80px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.1);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+  }
+
+  /* Grid */
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px 24px; }
+  .detail-grid.single { grid-template-columns: 1fr; }
+  .dg-item {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .dg-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); font-family: var(--mono); margin-bottom: 5px; }
+  .dg-value { font-size: 15px; font-weight: 600; }
+  .dg-value.mono { font-family: var(--mono); font-size: 13px; }
+  .dg-value.ok   { color: #4ade80; }
+  .dg-value.warn { color: #f97316; }
+  .dg-value.bad  { color: #f87171; }
+
+  /* Temp display */
+  .temp-row { display: flex; align-items: baseline; gap: 6px; }
+  .temp-main { font-size: 26px; font-weight: 700; font-family: var(--mono); color: var(--accent2); }
+  .temp-range { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+  /* Section heading inside detail */
+  .detail-section { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); padding: 4px 24px 0; margin-top: 8px; }
+
+  /* Colors list inside master detail */
+  .colors-list { padding: 0 24px; }
+  .color-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .color-row:last-child { border-bottom: none; }
+  .cr-swatch { width: 22px; height: 22px; border-radius: 5px; border: 1px solid rgba(255,255,255,.1); flex-shrink: 0; }
+  .cr-name { font-size: 13px; flex: 1; }
+  .cr-id { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .cr-hex { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+  /* Back breadcrumb */
+  .back-btn {
+    display: flex; align-items: center; gap: 6px; cursor: pointer;
+    font-size: 13px; color: var(--muted); padding: 16px 24px 0;
+    transition: color .15s;
+  }
+  .back-btn:hover { color: var(--accent); }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty .ico { font-size: 48px; margin-bottom: 12px; }
+  .empty p { font-size: 14px; }
+
+  /* Stats bar */
+  .stats {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    padding: 14px 0; border-bottom: 1px solid var(--border); margin-bottom: 8px;
+  }
+  .stat { font-size: 12px; color: var(--muted); }
+  .stat span { color: var(--text); font-weight: 600; font-family: var(--mono); }
+
+  /* QR landing */
+  #qr-result {
+    display: none;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
+  }
+  #qr-result.show { display: block; }
+  .qr-banner {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(0,229,255,.08); border: 1px solid rgba(0,229,255,.3);
+    border-radius: 10px; padding: 12px 16px; margin-bottom: 16px;
+  }
+  .qr-banner-icon { font-size: 24px; }
+  .qr-banner-text { font-size: 13px; color: var(--accent); font-weight: 600; }
+  .qr-banner-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <div class="hdr-icon">🧵</div>
+    <div>
+      <div class="hdr-title">FILAMENT_DB</div>
+      <div class="hdr-sub">3D-Filament Datenbank · Bambu Studio</div>
+    </div>
+  </div>
+
+  <!-- QR scan result banner -->
+  <div id="qr-result">
+    <div class="qr-banner">
+      <div class="qr-banner-icon">📱</div>
+      <div>
+        <div class="qr-banner-text">QR-Code gescannt</div>
+        <div class="qr-banner-sub" id="qr-banner-sub">Lade Daten…</div>
+      </div>
+    </div>
+    <div id="qr-detail-inline"></div>
+  </div>
+
+  <!-- Search -->
+  <div class="search-wrap">
+    <input type="search" id="search" placeholder="Suche nach ID, Material, Farbe…" autocomplete="off">
+    <span class="ico">⌕</span>
+  </div>
+
+  <!-- Filter chips -->
+  <div class="filters" id="filters">
+    <div class="chip active" data-filter="all">Alle</div>
+    <div class="chip" data-filter="BAM">Bambu Lab</div>
+    <div class="chip" data-filter="ESN">eSUN</div>
+    <div class="chip" data-filter="ERY">ERYONE</div>
+    <div class="chip" data-filter="GEE">Geeetech</div>
+    <div class="chip" data-filter="SUN">SUNLU</div>
+    <div class="chip" data-filter="colors">🎨 Farben</div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+  <div id="list"></div>
+</div>
+
+<!-- Detail panel -->
+<div class="detail" id="detail" onclick="closeDetail(event)">
+  <div class="detail-sheet" id="detail-sheet">
+    <div class="detail-handle"></div>
+    <div id="detail-content"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════
+// DATA  — Master filaments
+// ══════════════════════════════════════════════════════════════════════════
+const MASTERS = [
+  ["BAM-001","Bambu Lab","PLA Basic","PLA",220,190,230,35,25,45,200,21,100,0.8,30,45,8,"Cool Plate / PEI","Bambu PLA Basic","Ja","Nein","RFID, Standard-Filament"],
+  ["BAM-002","Bambu Lab","PLA Matte","PLA",220,190,230,35,25,45,200,21,100,0.8,30,45,8,"Cool Plate / PEI","Bambu PLA Matte","Ja","Nein","Matte Oberfläche"],
+  ["BAM-003","Bambu Lab","PLA Silk","PLA",230,200,240,35,25,45,150,15,100,0.8,25,45,8,"Cool Plate / PEI","Bambu PLA Silk","Ja","Nein","Glänzend, seidige Optik"],
+  ["BAM-004","Bambu Lab","PLA-CF","PLA-CF",230,200,240,35,25,45,150,14,100,0.8,25,65,8,"Cool Plate / PEI","Bambu PLA-CF","Ja","Nein","Carbon-verstärkt, Stahlnozzle"],
+  ["BAM-005","Bambu Lab","PLA Galaxy","PLA",225,200,235,35,25,45,180,18,100,0.8,30,45,8,"Cool Plate / PEI","Bambu PLA Basic","Ja","Nein","Glitzereffekt"],
+  ["BAM-006","Bambu Lab","PLA Marble","PLA",225,200,235,35,25,45,150,15,100,0.8,25,45,8,"Cool Plate / PEI","Bambu PLA Basic","Ja","Nein","Marmor-Optik, abrasiv"],
+  ["BAM-007","Bambu Lab","PLA Sparkle","PLA",225,200,235,35,25,45,150,14,100,0.8,25,45,8,"Cool Plate / PEI","Bambu PLA Basic","Ja","Nein","Glitzerpartikel, abrasiv"],
+  ["BAM-008","Bambu Lab","PLA Glow","PLA",225,200,235,35,25,45,120,12,100,0.8,25,45,8,"Cool Plate / PEI","Bambu PLA Basic","Ja","Nein","Phosphoreszierend, Stahlnozzle"],
+  ["BAM-009","Bambu Lab","PLA LW","PLA-LW",230,200,240,35,25,45,100,10,100,0.5,20,45,8,"Cool Plate / PEI","Generic PLA","Nein","Nein","Schäumendes PLA"],
+  ["BAM-010","Bambu Lab","PLA High Speed","PLA-HS",230,200,240,35,25,45,500,32,100,0.8,30,45,8,"Cool Plate / PEI","Bambu PLA Basic","Ja","Nein","High Speed"],
+  ["BAM-011","Bambu Lab","PETG HF","PETG",250,230,260,70,60,85,150,16,80,1.0,25,65,8,"Engineering Plate","Bambu PETG HF","Ja","Nein","High Flow, UV-beständig"],
+  ["BAM-012","Bambu Lab","PETG-CF","PETG-CF",255,240,265,70,60,85,120,14,60,1.0,25,80,8,"Engineering Plate","Bambu PETG-CF","Ja","Nein","Carbon, Stahlnozzle"],
+  ["BAM-013","Bambu Lab","ABS","ABS",250,240,270,100,90,110,120,14,20,1.2,20,80,4,"High Temp Plate","Bambu ABS","Ja","Ja","Gehäuse nötig!"],
+  ["BAM-014","Bambu Lab","ASA","ASA",250,240,270,100,90,110,120,14,20,1.2,20,80,4,"High Temp Plate","Bambu ASA","Ja","Ja","UV-stabil, Gehäuse"],
+  ["BAM-015","Bambu Lab","TPU 95A","TPU",230,220,240,35,30,45,80,8,90,0.5,15,55,8,"Smooth PEI","Bambu TPU 95A","Nein","Nein","Shore 95A, kein AMS"],
+  ["BAM-016","Bambu Lab","TPU 95A HF","TPU-HF",230,220,240,35,30,45,200,16,90,0.5,15,55,8,"Smooth PEI","Bambu TPU 95A HF","Nein","Nein","High Flow TPU"],
+  ["BAM-017","Bambu Lab","PA6-CF","PA6-CF",280,260,300,80,70,90,100,12,30,1.5,20,80,12,"Engineering Plate","Bambu PA6-CF","Ja","Ja","Nylon CF, Stahlnozzle"],
+  ["BAM-018","Bambu Lab","PA6-GF","PA6-GF",280,260,300,80,70,90,100,12,30,1.5,20,80,12,"Engineering Plate","Generic PA","Ja","Ja","Nylon GF"],
+  ["BAM-019","Bambu Lab","PAHT-CF","PAHT-CF",300,280,320,100,90,110,80,10,20,1.5,18,100,12,"High Temp Plate","Bambu PAHT-CF","Ja","Ja","High-Temp Nylon CF"],
+  ["BAM-020","Bambu Lab","PC","PC",280,260,300,110,100,120,80,10,10,1.5,18,80,8,"High Temp Plate","Bambu PC","Ja","Ja","Polycarbonat"],
+  ["BAM-021","Bambu Lab","PC-CF","PC-CF",300,280,320,110,100,120,80,9,10,1.5,18,80,8,"High Temp Plate","Generic PC","Ja","Ja","PC+Carbon"],
+  ["BAM-022","Bambu Lab","PET-CF","PET-CF",280,260,300,80,70,90,80,10,30,1.5,18,80,8,"Engineering Plate","Generic PET-CF","Nein","Ja","PET Carbon Fiber"],
+  ["BAM-023","Bambu Lab","PVA","PVA",210,195,215,35,25,45,80,8,100,1.0,20,45,4,"Cool Plate","Generic PVA","Ja","Nein","Wasserlöslich"],
+  ["BAM-024","Bambu Lab","BVOH","BVOH",210,195,215,35,25,45,80,8,100,1.0,20,45,4,"Cool Plate","Generic BVOH","Ja","Nein","Wasserlöslich"],
+  ["BAM-025","Bambu Lab","Support PLA","Support-PLA",220,200,230,35,25,45,150,15,100,0.8,25,45,8,"Cool Plate","Bambu Support PLA","Ja","Nein","Stützmaterial"],
+  ["BAM-026","Bambu Lab","Support PA/PET","Support-PA",260,240,280,80,70,90,100,10,30,1.2,20,80,8,"Engineering Plate","Generic Support","Ja","Ja","Stützmaterial"],
+  ["BAM-027","Bambu Lab","PPS-CF","PPS-CF",330,310,350,120,110,130,60,8,0,2.0,15,120,12,"High Temp Plate","Generic PPS","Nein","Ja","Hochleistung"],
+  ["ESN-001","eSUN","ePLA Basic","PLA",215,190,230,60,50,70,150,15,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Basismaterial"],
+  ["ESN-002","eSUN","ePLA+","PLA+",220,200,235,60,50,70,150,16,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Verbesserte Zähigkeit"],
+  ["ESN-003","eSUN","ePLA-Silk","PLA-Silk",220,195,230,60,50,70,100,12,100,0.8,25,45,8,"PEI / Glass","Generic PLA Silk","Ja","Nein","Seidige Oberfläche"],
+  ["ESN-004","eSUN","ePLA-Matte","PLA-Matte",220,200,235,60,50,70,150,15,100,0.8,30,45,8,"PEI / Glass","Generic PLA Matte","Ja","Nein","Matte Oberfläche"],
+  ["ESN-005","eSUN","ePLA-Marble","PLA",220,200,235,60,50,70,100,10,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Marmor-Optik"],
+  ["ESN-006","eSUN","ePLA-Wood","PLA",200,190,210,60,50,70,50,8,100,0.8,20,45,8,"PEI / Glass","Generic PLA","Nein","Nein","Holzfaser"],
+  ["ESN-007","eSUN","ePLA-Glow","PLA",215,200,230,60,50,70,100,10,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Phosphoreszierend"],
+  ["ESN-008","eSUN","ePLA-LW","PLA-LW",230,200,250,60,50,70,100,10,100,0.5,20,45,8,"PEI / Glass","Generic PLA","Nein","Nein","Lightweight"],
+  ["ESN-009","eSUN","ePLA-ST","PLA-T",220,200,235,60,50,70,150,16,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Schlagzäh"],
+  ["ESN-010","eSUN","ePLA-Rapid","PLA-HS",230,210,245,60,50,70,400,28,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","High Speed"],
+  ["ESN-011","eSUN","ePETG","PETG",235,220,250,75,65,85,100,12,70,1.0,25,65,8,"PEI / Glass","Generic PETG","Ja","Nein","Gute Haftung"],
+  ["ESN-012","eSUN","ePETG-Matte","PETG-Matte",240,225,255,75,65,85,100,12,60,1.0,25,65,8,"PEI / Glass","Generic PETG","Ja","Nein","Matte PETG"],
+  ["ESN-013","eSUN","eABS+","ABS+",250,230,260,100,85,110,120,13,20,1.2,20,80,4,"Glass / High Temp","Generic ABS","Ja","Ja","Verbessert"],
+  ["ESN-014","eSUN","eABS-Max","ABS",255,240,265,100,90,110,100,12,10,1.2,18,80,4,"Glass / High Temp","Generic ABS","Ja","Ja","Grossvolumig"],
+  ["ESN-015","eSUN","eASA","ASA",250,240,265,100,90,110,120,13,20,1.2,20,80,4,"Glass / High Temp","Generic ASA","Ja","Ja","UV-stabil"],
+  ["ESN-016","eSUN","eTPU-95A","TPU",230,210,240,40,30,50,40,6,90,0.5,15,55,8,"PEI / Glass","Generic TPU","Nein","Nein","Shore 95A"],
+  ["ESN-017","eSUN","eTPU-Rapid","TPU-HS",225,210,240,40,30,50,150,12,90,0.5,15,55,8,"PEI / Glass","Generic TPU","Nein","Nein","High Speed TPU"],
+  ["ESN-018","eSUN","eTPU-LW","TPU-LW",225,210,240,40,30,50,80,8,90,0.5,15,55,8,"PEI / Glass","Generic TPU","Nein","Nein","Leichtbau"],
+  ["ESN-019","eSUN","ePA","PA",260,240,280,80,70,90,80,10,20,1.5,18,80,12,"Glass / High Temp","Generic PA","Ja","Ja","Nylon"],
+  ["ESN-020","eSUN","ePC","PC",250,235,265,110,100,120,60,8,10,1.5,16,80,6,"High Temp Plate","Generic PC","Ja","Ja","Polycarbonat"],
+  ["ESN-021","eSUN","ePVA+","PVA",210,195,215,35,25,45,60,6,100,1.0,18,45,4,"PEI / Glass","Generic PVA","Ja","Nein","Wasserlöslich"],
+  ["ESN-022","eSUN","eHIPS","HIPS",240,230,255,100,90,110,80,10,20,1.2,20,80,4,"Glass / High Temp","Generic HIPS","Ja","Ja","Limonene-löslich"],
+  ["ERY-001","ERYONE","Standard PLA","PLA",215,200,230,60,50,65,100,12,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Breite Farbpalette"],
+  ["ERY-002","ERYONE","PLA+","PLA+",220,200,230,60,50,65,100,12,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Verbessert"],
+  ["ERY-003","ERYONE","PLA Rainbow","PLA",215,200,230,60,50,65,80,10,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Regenbogen"],
+  ["ERY-004","ERYONE","PLA Galaxy","PLA",215,200,230,60,50,65,80,10,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Glitzerpartikel"],
+  ["ERY-005","ERYONE","PLA-CF","PLA-CF",225,210,235,60,50,65,80,9,100,0.8,25,65,8,"PEI / Glass","Generic PLA-CF","Ja","Nein","Carbon"],
+  ["ERY-006","ERYONE","PLA Wood","PLA",200,195,215,60,50,65,50,6,100,0.8,20,45,8,"PEI / Glass","Generic PLA","Nein","Nein","Holzfüllung"],
+  ["ERY-007","ERYONE","PLA Metallic","PLA",215,200,230,60,50,65,80,9,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Metallisch"],
+  ["ERY-008","ERYONE","PLA Marble","PLA",215,200,230,60,50,65,80,9,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Marmor"],
+  ["ERY-009","ERYONE","PLA Glow","PLA",215,200,230,60,50,65,80,8,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Phosphoreszierend"],
+  ["ERY-010","ERYONE","PLA Silk","PLA-Silk",220,200,230,60,50,65,80,10,100,0.8,25,45,8,"PEI / Glass","Generic PLA Silk","Ja","Nein","Seide"],
+  ["ERY-011","ERYONE","PLA Silk Dual","PLA-Silk",220,200,230,60,50,65,60,8,100,0.8,20,45,8,"PEI / Glass","Generic PLA Silk","Ja","Nein","Zweifarbig"],
+  ["ERY-012","ERYONE","PLA Silk Triple","PLA-Silk",220,200,230,60,50,65,60,8,100,0.8,20,45,8,"PEI / Glass","Generic PLA Silk","Ja","Nein","Dreifarbig"],
+  ["ERY-013","ERYONE","PLA Ultra Silk","PLA-Silk",225,205,235,60,50,65,60,8,100,0.8,20,45,8,"PEI / Glass","Generic PLA Silk","Ja","Nein","Ultra Glanz"],
+  ["ERY-014","ERYONE","PLA Matte","PLA-Matte",220,200,230,60,50,65,100,12,100,0.8,30,45,8,"PEI / Glass","Generic PLA Matte","Ja","Nein","Matt"],
+  ["ERY-015","ERYONE","PLA Matte Dual","PLA-Matte",220,200,230,60,50,65,80,10,100,0.8,25,45,8,"PEI / Glass","Generic PLA Matte","Ja","Nein","Zweifarbig Matt"],
+  ["ERY-016","ERYONE","PLA Matte HS","PLA-Matte-HS",230,210,245,60,50,65,300,22,100,0.8,30,45,8,"PEI / Glass","Generic PLA Matte","Ja","Nein","High Speed Matt"],
+  ["ERY-017","ERYONE","PLA Burnt Titanium","PLA",215,200,230,60,50,65,80,9,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Titanium-Effekt"],
+  ["ERY-018","ERYONE","High-Speed PLA","PLA-HS",235,215,250,60,50,65,300,24,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","High Speed"],
+  ["ERY-019","ERYONE","High-Speed PLA+","PLA+-HS",235,215,250,60,50,65,300,24,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","PLA+ HS"],
+  ["ERY-020","ERYONE","PETG","PETG",222,215,230,90,80,100,60,8,70,1.0,25,65,8,"PEI / Glass","Generic PETG","Ja","Nein","Klogfrei"],
+  ["ERY-021","ERYONE","PETG-CF","PETG-CF",225,215,235,90,80,100,60,8,60,1.0,25,80,8,"PEI / Glass","Generic PETG-CF","Ja","Nein","Carbon PETG"],
+  ["ERY-022","ERYONE","Galaxy PETG","PETG",222,215,230,90,80,100,60,8,70,1.0,25,65,8,"PEI / Glass","Generic PETG","Ja","Nein","Glitzer PETG"],
+  ["ERY-023","ERYONE","ABS","ABS",240,230,260,100,90,110,80,10,20,1.2,20,80,4,"Glass / High Temp","Generic ABS","Ja","Ja","Gehäuse nötig"],
+  ["ERY-024","ERYONE","ASA","ASA",240,230,260,100,90,110,80,10,20,1.2,20,80,4,"Glass / High Temp","Generic ASA","Ja","Ja","UV-stabil"],
+  ["ERY-025","ERYONE","TPU 95A","TPU",205,190,220,50,30,60,40,6,90,0.5,15,55,8,"PEI / Glass","Generic TPU","Nein","Nein","Shore 95A"],
+  ["ERY-026","ERYONE","TPU Rainbow","TPU",205,190,220,50,30,60,30,5,90,0.5,15,55,8,"PEI / Glass","Generic TPU","Nein","Nein","Regenbogen"],
+  ["ERY-027","ERYONE","PA (Nylon)","PA",260,240,280,80,70,90,60,8,20,1.5,18,80,12,"Glass / High Temp","Generic PA","Ja","Ja","Nylon"],
+  ["ERY-028","ERYONE","PP","PP",240,230,260,0,0,30,60,8,80,1.0,20,60,8,"PP Tape / Glue","Generic PP","Nein","Nein","Polypropylen"],
+  ["GEE-001","Geeetech","PLA","PLA",210,195,230,50,40,60,100,12,100,0.8,40,45,8,"PEI / Glass","Generic PLA","Ja","Nein","±0.02mm"],
+  ["GEE-002","Geeetech","PLA Silk","PLA-Silk",215,195,225,50,40,60,80,10,100,0.8,25,45,8,"PEI / Glass","Generic PLA Silk","Ja","Nein","Seide"],
+  ["GEE-003","Geeetech","PLA Matte","PLA-Matte",215,195,225,50,40,60,100,12,100,0.8,30,45,8,"PEI / Glass","Generic PLA Matte","Ja","Nein","Matt"],
+  ["GEE-004","Geeetech","PLA Galaxy","PLA",210,195,225,50,40,60,80,10,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Glitzer"],
+  ["GEE-005","Geeetech","PLA High Speed","PLA-HS",230,210,245,50,40,60,300,24,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","High Speed"],
+  ["GEE-006","Geeetech","PLA Glow","PLA",210,195,225,50,40,60,80,8,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Phosphoreszierend"],
+  ["GEE-007","Geeetech","PETG","PETG",240,230,260,80,70,90,60,8,70,1.0,25,65,8,"PEI / Glass","Generic PETG","Ja","Nein","Korrosionsresistent"],
+  ["GEE-008","Geeetech","PETG Metallic","PETG",240,230,260,80,70,90,60,8,70,1.0,25,65,8,"PEI / Glass","Generic PETG","Ja","Nein","Metallic"],
+  ["GEE-009","Geeetech","ABS+","ABS+",250,240,265,100,90,110,80,10,20,1.2,20,80,4,"Glass / High Temp","Generic ABS","Ja","Ja","Wenig Verzug"],
+  ["GEE-010","Geeetech","ASA","ASA",250,240,265,100,90,110,80,10,20,1.2,20,80,4,"Glass / High Temp","Generic ASA","Ja","Ja","UV-stabil"],
+  ["GEE-011","Geeetech","TPU 95A","TPU",220,210,235,40,30,50,30,5,90,0.5,15,55,8,"PEI / Glass","Generic TPU","Nein","Nein","Shore 95A"],
+  ["SUN-001","SUNLU","PLA","PLA",215,190,220,60,50,65,100,12,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","±0.02mm"],
+  ["SUN-002","SUNLU","PLA+","PLA+",225,215,235,65,55,75,100,13,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Verbessert"],
+  ["SUN-003","SUNLU","PLA+ 2.0","PLA+",225,215,235,65,55,75,120,14,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Stärker"],
+  ["SUN-004","SUNLU","PLA Meta","PLA-Meta",200,185,215,60,50,65,150,16,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","High-Flow"],
+  ["SUN-005","SUNLU","PLA Matte","PLA-Matte",220,200,235,60,50,65,100,12,100,0.8,30,45,8,"PEI / Glass","Generic PLA Matte","Ja","Nein","Matt"],
+  ["SUN-006","SUNLU","PLA Classic","PLA",215,190,220,60,50,65,80,10,100,0.8,28,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Klassisch"],
+  ["SUN-007","SUNLU","PLA Silk+","PLA-Silk",225,205,235,60,50,65,80,10,100,0.8,25,45,8,"PEI / Glass","Generic PLA Silk","Ja","Nein","Seide+"],
+  ["SUN-008","SUNLU","PLA Silk Multi","PLA-Silk",225,205,235,60,50,65,60,8,100,0.8,22,45,8,"PEI / Glass","Generic PLA Silk","Ja","Nein","Mehrfarbig"],
+  ["SUN-009","SUNLU","PLA Galaxy","PLA",215,200,230,60,50,65,80,9,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Galaxy"],
+  ["SUN-010","SUNLU","PLA Glow","PLA",215,200,230,60,50,65,80,8,100,0.8,25,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Phosphoreszierend"],
+  ["SUN-011","SUNLU","PLA-CF","PLA-CF",225,210,235,60,50,65,80,9,100,0.8,25,65,8,"PEI / Glass","Generic PLA-CF","Ja","Nein","Carbon"],
+  ["SUN-012","SUNLU","PLA Lightweight","PLA-LW",230,200,250,60,50,65,80,8,100,0.5,20,45,8,"PEI / Glass","Generic PLA","Nein","Nein","Leichtbau"],
+  ["SUN-013","SUNLU","APLA","PLA+",225,215,235,65,55,75,120,14,100,0.8,30,45,8,"PEI / Glass","Generic PLA","Ja","Nein","Advanced PLA"],
+  ["SUN-014","SUNLU","PETG","PETG",230,220,250,65,60,75,100,12,70,1.0,25,65,8,"PEI / Glass","Generic PETG","Ja","Nein","Schlagfest"],
+  ["SUN-015","SUNLU","PETG-CF","PETG-CF",240,225,255,70,60,80,80,10,60,1.0,25,80,8,"PEI / Glass","Generic PETG-CF","Ja","Nein","Carbon"],
+  ["SUN-016","SUNLU","ABS","ABS",255,250,260,90,85,100,60,8,10,1.2,20,80,4,"Glass / High Temp","Generic ABS","Ja","Ja","Gehäuse nötig"],
+  ["SUN-017","SUNLU","ABS High Speed","ABS-HS",255,250,265,90,85,100,350,20,10,1.2,20,80,4,"Glass / High Temp","Generic ABS","Ja","Ja","High Speed"],
+  ["SUN-018","SUNLU","ABS-GF","ABS-GF",255,250,265,100,90,110,60,8,10,1.2,18,80,4,"Glass / High Temp","Generic ABS","Ja","Ja","Glasfaser"],
+  ["SUN-019","SUNLU","ABS-FR","ABS-FR",250,240,260,100,90,110,60,8,10,1.2,18,80,4,"Glass / High Temp","Generic ABS","Ja","Ja","Flammhemmend"],
+  ["SUN-020","SUNLU","ASA","ASA",250,240,265,100,90,110,80,10,20,1.2,20,80,4,"Glass / High Temp","Generic ASA","Ja","Ja","UV-stabil"],
+  ["SUN-021","SUNLU","TPU 95A","TPU",225,210,240,40,30,50,50,7,90,0.5,15,55,8,"PEI / Glass","Generic TPU","Nein","Nein","Shore 95A"],
+  ["SUN-022","SUNLU","TPU 90A","TPU",220,205,235,40,30,50,40,6,90,0.5,15,55,8,"PEI / Glass","Generic TPU","Nein","Nein","Shore 90A"],
+  ["SUN-023","SUNLU","TPU Silk","TPU-Silk",225,210,240,40,30,50,40,6,90,0.5,15,55,8,"PEI / Glass","Generic TPU","Nein","Nein","Seidiger Glanz"],
+  ["SUN-024","SUNLU","TPU High Speed","TPU-HS",225,210,240,40,30,50,200,14,90,0.5,15,55,8,"PEI / Glass","Generic TPU","Nein","Nein","High Speed"],
+  ["SUN-025","SUNLU","Easy PA","PA",255,240,270,80,70,90,60,8,20,1.5,18,80,12,"Glass / High Temp","Generic PA","Ja","Ja","Nylon"],
+  ["SUN-026","SUNLU","PA6-CF","PA6-CF",275,260,295,80,70,90,60,8,20,1.5,18,80,12,"Glass / High Temp","Generic PA","Nein","Ja","Nylon CF"],
+  ["SUN-027","SUNLU","PA6-GF","PA6-GF",275,260,295,80,70,90,60,8,20,1.5,18,80,12,"Glass / High Temp","Generic PA","Nein","Ja","Nylon GF"],
+  ["SUN-028","SUNLU","PA12-CF","PA12-CF",260,245,280,80,70,90,60,8,20,1.5,18,80,12,"Glass / High Temp","Generic PA","Nein","Ja","Nylon 12"],
+  ["SUN-029","SUNLU","PC","PC",270,260,290,110,100,120,60,8,10,1.5,18,80,8,"High Temp Plate","Generic PC","Ja","Ja","Polycarbonat"],
+  ["SUN-030","SUNLU","PC-ABS","PC-ABS",260,250,280,100,90,110,80,10,15,1.3,18,80,8,"High Temp Plate","Generic PC","Ja","Ja","PC+ABS"],
+  ["SUN-031","SUNLU","PP","PP",240,230,260,0,0,30,60,8,80,1.0,18,60,8,"PP Tape / Glue","Generic PP","Nein","Nein","Polypropylen"],
+  ["SUN-032","SUNLU","PVA","PVA",205,190,215,35,25,45,60,6,100,1.0,18,45,4,"PEI / Glass","Generic PVA","Ja","Nein","Wasserlöslich"],
+  ["SUN-033","SUNLU","PVB","PVB",215,205,225,60,50,65,80,8,100,0.8,25,55,4,"PEI / Glass","Generic PVB","Ja","Nein","IPA-löslich"],
+  ["SUN-034","SUNLU","PEEK","PEEK",420,400,450,120,100,130,30,5,0,2.0,12,120,24,"High Temp Plate","Generic PEEK","Nein","Ja","Bis 250°C"],
+];
+
+// Build lookup map
+const masterMap = {};
+MASTERS.forEach(m => { masterMap[m[0]] = m; });
+
+// Color data (subset shown inline — full data via ID lookup)
+const COLORS = [
+  ["BAM-001-001","BAM-001","Jade White","#FFFFFF"],["BAM-001-002","BAM-001","Black","#000000"],["BAM-001-003","BAM-001","Red","#C12E1F"],["BAM-001-004","BAM-001","Blue","#0A2989"],["BAM-001-005","BAM-001","Gray","#8E9089"],["BAM-001-006","BAM-001","Bambu Green","#00AE42"],["BAM-001-007","BAM-001","Mistletoe Green","#3F8E43"],["BAM-001-008","BAM-001","Cyan","#0086D6"],["BAM-001-009","BAM-001","Sunflower Yellow","#FEC600"],["BAM-001-010","BAM-001","Indigo Purple","#482960"],["BAM-001-011","BAM-001","Cobalt Blue","#0056B8"],["BAM-001-012","BAM-001","Cocoa Brown","#6F5034"],["BAM-001-013","BAM-001","Hot Pink","#F5547C"],["BAM-001-014","BAM-001","Pumpkin Orange","#FF9016"],["BAM-001-015","BAM-001","Gold","#E4BD68"],["BAM-001-016","BAM-001","Silver","#A6A9AA"],["BAM-001-017","BAM-001","Light Gray","#D1D3D5"],["BAM-001-018","BAM-001","Dark Gray","#545454"],["BAM-001-019","BAM-001","Blue Grey","#5B6579"],["BAM-001-020","BAM-001","Orange","#FF6A13"],["BAM-001-021","BAM-001","Yellow","#F4EE2A"],["BAM-001-022","BAM-001","Pink","#F55A74"],["BAM-001-023","BAM-001","Magenta","#EC008C"],["BAM-001-024","BAM-001","Purple","#5E43B7"],["BAM-001-025","BAM-001","Turquoise","#00B1B7"],["BAM-001-026","BAM-001","Bright Green","#BECF00"],["BAM-001-027","BAM-001","Beige","#F7E6DE"],["BAM-001-028","BAM-001","Bronze","#847D48"],["BAM-001-029","BAM-001","Brown","#9D432C"],["BAM-001-030","BAM-001","Maroon Red","#9D2235"],
+  ["BAM-002-001","BAM-002","Ivory White","#FFFFFF"],["BAM-002-002","BAM-002","Charcoal","#000000"],["BAM-002-003","BAM-002","Scarlet Red","#DE4343"],["BAM-002-004","BAM-002","Dark Red","#BB3D43"],["BAM-002-005","BAM-002","Plum","#950051"],["BAM-002-006","BAM-002","Sakura Pink","#E8AFCF"],["BAM-002-007","BAM-002","Lilac Purple","#AE96D4"],["BAM-002-008","BAM-002","Marine Blue","#0078BF"],["BAM-002-009","BAM-002","Dark Blue","#042F56"],["BAM-002-010","BAM-002","Sky Blue","#56B7E6"],["BAM-002-011","BAM-002","Ice Blue","#A3D8E1"],["BAM-002-012","BAM-002","Dark Green","#68724D"],["BAM-002-013","BAM-002","Grass Green","#61C680"],["BAM-002-014","BAM-002","Apple Green","#C2E189"],["BAM-002-015","BAM-002","Lemon Yellow","#F7D959"],["BAM-002-016","BAM-002","Mandarin Orange","#F99963"],["BAM-002-017","BAM-002","Terracotta","#B15533"],["BAM-002-018","BAM-002","Caramel","#AE835B"],["BAM-002-019","BAM-002","Latte Brown","#D3B7A7"],["BAM-002-020","BAM-002","Dark Brown","#7D6556"],["BAM-002-021","BAM-002","Dark Chocolate","#4D3324"],["BAM-002-022","BAM-002","Desert Tan","#E8DBB7"],["BAM-002-023","BAM-002","Bone White","#CBC6B8"],["BAM-002-024","BAM-002","Ash Gray","#9B9EA0"],["BAM-002-025","BAM-002","Nardo Gray","#757575"],
+];
+// Build color lookup + group by master
+const colorMap = {};
+const colorsByMaster = {};
+COLORS.forEach(c => {
+  colorMap[c[0]] = c;
+  if(!colorsByMaster[c[1]]) colorsByMaster[c[1]] = [];
+  colorsByMaster[c[1]].push(c);
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// URL ROUTING — handle ?id=XXX from QR scan
+// ══════════════════════════════════════════════════════════════════════════
+function getParam(key) {
+  return new URLSearchParams(window.location.search).get(key);
+}
+
+const scannedId = getParam('id');
+if (scannedId) {
+  const qrDiv = document.getElementById('qr-result');
+  const subEl  = document.getElementById('qr-banner-sub');
+  qrDiv.classList.add('show');
+  subEl.textContent = `ID: ${scannedId}`;
+
+  // Render inline detail
+  const target = document.getElementById('qr-detail-inline');
+  if (masterMap[scannedId]) {
+    target.innerHTML = buildMasterHTML(masterMap[scannedId]);
+  } else if (colorMap[scannedId]) {
+    target.innerHTML = buildColorHTML(colorMap[scannedId]);
+  } else {
+    target.innerHTML = `<p style="color:var(--muted);font-size:13px;padding:8px 0">ID nicht gefunden: ${scannedId}</p>`;
+  }
+  // Scroll to top
+  window.scrollTo(0,0);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// RENDER HELPERS
+// ══════════════════════════════════════════════════════════════════════════
+function brandColor(id) {
+  const p = id.slice(0,3);
+  return {BAM:'#2563EB',ESN:'#16A34A',ERY:'#DC2626',GEE:'#2563EB',SUN:'#D97706'}[p]||'#888';
+}
+function matBadgeColor(mat) {
+  const m = mat.toUpperCase();
+  if(m.includes('CF')||m.includes('GF')) return '#f97316';
+  if(m==='ABS'||m==='ASA') return '#ef4444';
+  if(m.includes('PA')||m==='PC'||m.includes('PEEK')) return '#a855f7';
+  if(m.includes('TPU')) return '#10b981';
+  if(m.includes('PETG')) return '#3b82f6';
+  return '#6b7280';
+}
+function luminance(hex){
+  const h=hex.replace('#','');
+  const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+  return 0.299*r+0.587*g+0.114*b;
+}
+
+function buildMasterHTML(m) {
+  const [id,brand,modell,mat,tempE,tempN,tempX,bettE,bettN,bettX,speed,vol,cool,einz,einzS,dryT,dryH,bettT,profil,ams,geh,notiz] = m;
+  const gehWarn = geh==='Ja';
+  const amsOk   = String(ams).startsWith('Ja');
+  const colors  = colorsByMaster[id]||[];
+  return `
+    <div class="detail-head">
+      <div>
+        <div class="detail-id">${id}</div>
+        <div class="detail-name">${modell}</div>
+        <div class="detail-brand">${brand} · <span style="color:${matBadgeColor(mat)}">${mat}</span></div>
+      </div>
+      <button class="close-btn" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="detail-section">TEMPERATUREN</div>
+    <div class="detail-grid">
+      <div class="dg-item">
+        <div class="dg-label">Düsentemp</div>
+        <div class="temp-row"><span class="temp-main">${tempE}°</span><span class="temp-range">${tempN}–${tempX} °C</span></div>
+      </div>
+      <div class="dg-item">
+        <div class="dg-label">Betttemp</div>
+        <div class="temp-row"><span class="temp-main" style="color:var(--accent)">${bettE}°</span><span class="temp-range">${bettN}–${bettX} °C</span></div>
+      </div>
+    </div>
+    <div class="detail-section">DRUCKPARAMETER</div>
+    <div class="detail-grid">
+      <div class="dg-item"><div class="dg-label">Geschwindigkeit</div><div class="dg-value mono">${speed} mm/s</div></div>
+      <div class="dg-item"><div class="dg-label">Max. Volumenstrom</div><div class="dg-value mono">${vol} mm³/s</div></div>
+      <div class="dg-item"><div class="dg-label">Kühlung</div><div class="dg-value mono">${cool}%</div></div>
+      <div class="dg-item"><div class="dg-label">Einzug</div><div class="dg-value mono">${einz}mm · ${einzS}mm/s</div></div>
+    </div>
+    <div class="detail-section">TROCKNUNG & DRUCKBETT</div>
+    <div class="detail-grid">
+      <div class="dg-item"><div class="dg-label">Trocknen</div><div class="dg-value mono">${dryT}°C · ${dryH}h</div></div>
+      <div class="dg-item"><div class="dg-label">Druckbett-Typ</div><div class="dg-value" style="font-size:12px">${bettT}</div></div>
+      <div class="dg-item"><div class="dg-label">AMS kompatibel</div><div class="dg-value ${amsOk?'ok':'bad'}">${amsOk?'✓ Ja':'✗ Nein'}</div></div>
+      <div class="dg-item"><div class="dg-label">Gehäuse nötig</div><div class="dg-value ${gehWarn?'warn':'ok'}">${gehWarn?'⚠ Ja':'✓ Nein'}</div></div>
+    </div>
+    <div class="detail-section">BAMBU STUDIO PROFIL</div>
+    <div class="detail-grid single">
+      <div class="dg-item"><div class="dg-label">Profil-Name</div><div class="dg-value mono" style="font-size:13px">${profil}</div></div>
+    </div>
+    ${notiz?`<div class="detail-section">NOTIZEN</div><div style="padding:8px 24px 0"><div class="dg-item"><div class="dg-value" style="font-size:13px;color:var(--muted)">${notiz}</div></div></div>`:''}
+    ${colors.length?`
+    <div class="detail-section">VERFÜGBARE FARBEN (${colors.length})</div>
+    <div class="colors-list">
+      ${colors.map(c=>`
+        <div class="color-row" onclick="openColorDetail('${c[0]}')" style="cursor:pointer">
+          <div class="cr-swatch" style="background:${c[3]}"></div>
+          <div class="cr-name">${c[2]}</div>
+          <div class="cr-id">${c[0]}</div>
+          <div class="cr-hex">${c[3]}</div>
+        </div>`).join('')}
+    </div>`:''}
+  `;
+}
+
+function buildColorHTML(c) {
+  const [farbId, masterId, colorName, hex] = c;
+  const master = masterMap[masterId];
+  const lum = luminance(hex);
+  const textC = lum < 130 ? '#FFFFFF' : '#000000';
+  return `
+    <div class="detail-head">
+      <div>
+        <div class="detail-id">${farbId}</div>
+        <div class="detail-name">${colorName}</div>
+        <div class="detail-brand">${master?master[1]+' · '+master[2]:masterId}</div>
+      </div>
+      <button class="close-btn" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="detail-swatch-wrap">
+      <div class="detail-swatch-large" style="background:${hex};color:${textC}">${hex}</div>
+    </div>
+    <div class="detail-section">FARB-DETAILS</div>
+    <div class="detail-grid">
+      <div class="dg-item"><div class="dg-label">Farb-ID</div><div class="dg-value mono">${farbId}</div></div>
+      <div class="dg-item"><div class="dg-label">HEX-Code</div><div class="dg-value mono">${hex}</div></div>
+      <div class="dg-item"><div class="dg-label">Master-Filament</div><div class="dg-value mono">${masterId}</div></div>
+      <div class="dg-item"><div class="dg-label">Modell</div><div class="dg-value" style="font-size:13px">${master?master[2]:'-'}</div></div>
+    </div>
+    ${master?`
+    <div class="back-btn" onclick="openMasterDetail('${masterId}')">← Zu ${master[2]} (${masterId})</div>
+    <div class="detail-section">DRUCKEINSTELLUNGEN</div>
+    <div class="detail-grid">
+      <div class="dg-item"><div class="dg-label">Düsentemp</div><div class="temp-row"><span class="temp-main">${master[4]}°</span><span class="temp-range">${master[5]}–${master[6]} °C</span></div></div>
+      <div class="dg-item"><div class="dg-label">Betttemp</div><div class="temp-row"><span class="temp-main" style="color:var(--accent)">${master[7]}°</span><span class="temp-range">${master[8]}–${master[9]} °C</span></div></div>
+      <div class="dg-item"><div class="dg-label">Geschwindigkeit</div><div class="dg-value mono">${master[10]} mm/s</div></div>
+      <div class="dg-item"><div class="dg-label">Kühlung</div><div class="dg-value mono">${master[12]}%</div></div>
+    </div>`:''}
+  `;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// LIST RENDERING
+// ══════════════════════════════════════════════════════════════════════════
+let activeFilter = 'all';
+let searchQuery  = '';
+let showColors   = false;
+
+function render() {
+  const list = document.getElementById('list');
+  const stats = document.getElementById('stats');
+  const q = searchQuery.toLowerCase();
+
+  let filtered = MASTERS.filter(m => {
+    if(activeFilter !== 'all' && activeFilter !== 'colors' && !m[0].startsWith(activeFilter)) return false;
+    if(activeFilter === 'colors') return false;
+    if(q && !m[0].toLowerCase().includes(q) && !m[2].toLowerCase().includes(q) && !m[3].toLowerCase().includes(q) && !m[1].toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  let filteredColors = [];
+  if(activeFilter === 'colors' || activeFilter === 'all') {
+    filteredColors = COLORS.filter(c => {
+      if(q && !c[0].toLowerCase().includes(q) && !c[2].toLowerCase().includes(q) && !c[3].toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }
+
+  // Stats
+  stats.innerHTML = `
+    <div class="stat">Filamente: <span>${filtered.length}</span></div>
+    ${filteredColors.length ? `<div class="stat">Farben: <span>${filteredColors.length}</span></div>` : ''}
+    <div class="stat">Gesamt: <span>${filtered.length + filteredColors.length}</span></div>
+  `;
+
+  let html = '';
+
+  if(filtered.length) {
+    if(activeFilter === 'all') html += `<div class="section-label">Master-Filamente</div>`;
+    filtered.forEach(m => {
+      const pfxColor = brandColor(m[0]);
+      html += `
+        <div class="card" onclick="openMasterDetail('${m[0]}')">
+          <div style="width:4px;height:40px;border-radius:2px;background:${pfxColor};flex-shrink:0"></div>
+          <div>
+            <div class="card-id">${m[0]}</div>
+            <div class="card-name">${m[2]}</div>
+            <div class="card-sub">${m[1]}</div>
+          </div>
+          <div>
+            <div class="card-badge" style="color:${matBadgeColor(m[3])};border-color:${matBadgeColor(m[3])}33">${m[3]}</div>
+            <div style="font-size:11px;color:var(--muted);text-align:right;margin-top:6px">${m[4]}°C / ${m[7]}°C</div>
+          </div>
+        </div>`;
+    });
+  }
+
+  if(filteredColors.length) {
+    html += `<div class="section-label" style="margin-top:20px">Farb-Varianten</div>`;
+    filteredColors.forEach(c => {
+      const lum = luminance(c[3]);
+      html += `
+        <div class="card color-card" onclick="openColorDetail('${c[0]}')">
+          <div class="swatch" style="background:${c[3]}"></div>
+          <div>
+            <div class="card-id">${c[0]}</div>
+            <div class="card-name">${c[2]}</div>
+            <div class="card-sub">${masterMap[c[1]]?masterMap[c[1]][2]:c[1]}</div>
+          </div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--muted)">${c[3]}</div>
+        </div>`;
+    });
+  }
+
+  if(!html) {
+    html = `<div class="empty"><div class="ico">🔍</div><p>Keine Ergebnisse für „${q}"</p></div>`;
+  }
+
+  list.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// DETAIL PANEL
+// ══════════════════════════════════════════════════════════════════════════
+function openMasterDetail(id) {
+  const m = masterMap[id];
+  if(!m) return;
+  document.getElementById('detail-content').innerHTML = buildMasterHTML(m);
+  document.getElementById('detail').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+
+function openColorDetail(id) {
+  const c = colorMap[id];
+  if(!c) return;
+  document.getElementById('detail-content').innerHTML = buildColorHTML(c);
+  document.getElementById('detail').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+
+function closeDetail(e) {
+  if(e && e.target !== document.getElementById('detail')) return;
+  document.getElementById('detail').classList.remove('open');
+  document.body.style.overflow='';
+}
+
+window.closeDetail = closeDetail;
+window.openMasterDetail = openMasterDetail;
+window.openColorDetail = openColorDetail;
+
+// ══════════════════════════════════════════════════════════════════════════
+// EVENT LISTENERS
+// ══════════════════════════════════════════════════════════════════════════
+document.getElementById('search').addEventListener('input', e => {
+  searchQuery = e.target.value;
+  render();
+});
+
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    activeFilter = chip.dataset.filter;
+    render();
+  });
+});
+
+// Keyboard close
+document.addEventListener('keydown', e => {
+  if(e.key==='Escape') closeDetail();
+});
+
+render();
+</script>
+</body>
+</html>
